@@ -1,6 +1,10 @@
 -- sorry for the messy code, i rushed this!!
 
-local Module = {}
+local coreGui
+
+if cloneref then
+	coreGui = cloneref(game:GetService("CoreGui"))
+end
 
 local Array = Instance.new("ScreenGui")
 local Side = Instance.new("Frame")
@@ -16,9 +20,10 @@ local TitleShadow_2 = Instance.new("ImageLabel")
 local UIGradient = Instance.new("UIGradient")
 
 Array.Name = "Array"
-Array.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+Array.Parent = coreGui or game:GetService("Players").LocalPlayer.PlayerGui
 Array.ZIndexBehavior = Enum.ZIndexBehavior.Global
 Array.ResetOnSpawn = false
+Array.DisplayOrder = 2147483647
 
 Side.Name = "Side"
 Side.Parent = Array
@@ -120,124 +125,120 @@ UIGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.from
 UIGradient.Rotation = 90
 UIGradient.Parent = Placeholder
 
-local function arraylist()
-	local addModule = {}
-	local TextService = game:GetService("TextService")
-	local MAX_BOUNDS = Vector2.new(1e5, 1e5)
+local addModule = {}
+local TextService = game:GetService("TextService")
+local MAX_BOUNDS = Vector2.new(1e5, 1e5)
 
-	Placeholder.Visible = false
+Placeholder.Visible = false
 
-	local function clone(instance: Instance, parent: any?)
-		assert(instance, "failed to clone, no instance provided.")
+local function clone(instance: Instance, parent: any?)
+	assert(instance, "failed to clone, no instance provided.")
 
-		local newClone = instance:Clone()
-		if not newClone then
-			warn("failed to clone, cloned instance was not found.")
-			return
-		end
-
-		if parent then
-			newClone.Parent = parent
-		end
-
-		return newClone
+	local newClone = instance:Clone()
+	if not newClone then
+		warn("failed to clone, cloned instance was not found.")
+		return
 	end
 
-	local function getFont(item: GuiLabel)
-		assert(item)
-
-		for _, font in pairs(Enum.Font:GetEnumItems()) do
-			if item.Font.Name == font.Name then
-				return font.Name
-			else
-				continue
-			end
-		end
-
-		return nil
+	if parent then
+		newClone.Parent = parent
 	end
 
-	local function resizeArray(item: Frame, extraPadding: number?)
-		local textLabel = item:FindFirstChild("Text") :: TextLabel
-		if not textLabel then return end
-
-		local textSize = TextService:GetTextSize(
-			textLabel.Text,
-			textLabel.TextSize,
-			getFont(textLabel),
-			MAX_BOUNDS
-		)
-
-		local newPadding = if extraPadding then extraPadding else 25
-
-		item.Size = UDim2.new(0, textSize.X + newPadding, item.Size.Y.Scale, item.Size.Y.Offset)
-	end
-
-	local function resizeText(item: TextLabel)
-		local text = item.Text
-		local fontSize = item.TextSize
-		local font = getFont(item)
-
-		local textSize = TextService:GetTextSize(text, fontSize, font, MAX_BOUNDS)
-
-		item.Size = UDim2.new(0, textSize.X, 0, textSize.Y)
-	end
-
-	function addModule.title(text: string)
-		assert(text)
-
-		local Text = Title:FindFirstChild("Text")
-		Text.Text = text
-
-		resizeText(Text)
-		resizeArray(Title, 20)
-	end
-
-	function addModule.new(data: { name: string })
-		if not data then
-			return
-		end
-
-		local Name = data.name
-
-		local newArray = clone(Placeholder, Side) :: Instance
-		local textArray = newArray.Text
-
-		newArray.Name = Name
-		textArray.Text = Name
-
-		newArray.Visible = true
-
-		resizeText(textArray)
-		resizeArray(newArray)
-
-		return newArray
-	end
-
-	function addModule.updText(data: { array: Instance, newText: string })
-		assert(data)
-
-		local Array = data.array
-		if Array then
-			local arrayText = Array.Text
-			arrayText.Text = data.newText
-
-			resizeText(arrayText)
-			resizeArray(Array)
-		else
-			return false
-		end
-
-		return true
-	end
-	
-	function addModule.Toggle(array: Instance)
-		assert(array)
-		
-		array.Visible = not array.Visible
-	end
-
-	return addModule
+	return newClone
 end
 
-return arraylist
+local function getFont(item: GuiLabel)
+	assert(item)
+
+	for _, font in pairs(Enum.Font:GetEnumItems()) do
+		if item.Font.Name == font.Name then
+			return font.Name
+		else
+			continue
+		end
+	end
+
+	return nil
+end
+
+local function resizeArray(item: Frame, extraPadding: number?)
+	local textLabel = item:FindFirstChild("Text") :: TextLabel
+	if not textLabel then return end
+
+	local textSize = TextService:GetTextSize(
+		textLabel.Text,
+		textLabel.TextSize,
+		getFont(textLabel),
+		MAX_BOUNDS
+	)
+
+	local newPadding = if extraPadding then extraPadding else 25
+
+	item.Size = UDim2.new(0, textSize.X + newPadding, item.Size.Y.Scale, item.Size.Y.Offset)
+end
+
+local function resizeText(item: TextLabel)
+	local text = item.Text
+	local fontSize = item.TextSize
+	local font = getFont(item)
+
+	local textSize = TextService:GetTextSize(text, fontSize, font, MAX_BOUNDS)
+
+	item.Size = UDim2.new(0, textSize.X, 0, textSize.Y)
+end
+
+function addModule.title(text: string)
+	assert(text)
+
+	local Text = Title:FindFirstChild("Text")
+	Text.Text = text
+
+	resizeText(Text)
+	resizeArray(Title, 20)
+end
+
+function addModule.new(data: { name: string })
+	if not data then
+		return
+	end
+
+	local Name = data.name
+
+	local newArray = clone(Placeholder, Side) :: Instance
+	local textArray = newArray.Text
+
+	newArray.Name = Name
+	textArray.Text = Name
+
+	newArray.Visible = true
+
+	resizeText(textArray)
+	resizeArray(newArray)
+
+	return newArray
+end
+
+function addModule.updText(data: { array: Instance, newText: string })
+	assert(data)
+
+	local Array = data.array
+	if Array then
+		local arrayText = Array.Text
+		arrayText.Text = data.newText
+
+		resizeText(arrayText)
+		resizeArray(Array)
+	else
+		return false
+	end
+
+	return true
+end
+
+function addModule.Toggle(array: Instance)
+	assert(array)
+	
+	array.Visible = not array.Visible
+end
+
+return addModule
