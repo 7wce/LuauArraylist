@@ -1,10 +1,25 @@
--- sorry for the messy code, i rushed this!!
-
-local coreGui
-
-if cloneref then
-	coreGui = cloneref(game:GetService("CoreGui"))
+local function tryFunc(f)
+	if f and f() then
+		return true
+	else
+		return false
+	end
 end
+
+if tryFunc(getgenv) == true then
+	if getgenv().arraylistLoaded then
+		return
+	end
+	
+	getgenv().arraylistLoaded = true
+end
+
+local uiparent = tryFunc(cloneref) and cloneref(game:GetService("CoreGui")) or game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local Module = {}
+
+local TextService = game:GetService("TextService")
+local TweenService = game:GetService("TweenService")
 
 local Array = Instance.new("ScreenGui")
 local Side = Instance.new("Frame")
@@ -19,8 +34,7 @@ local Text_2 = Instance.new("TextLabel")
 local TitleShadow_2 = Instance.new("ImageLabel")
 local UIGradient = Instance.new("UIGradient")
 
-Array.Name = "Array"
-Array.Parent = coreGui or game:GetService("Players").LocalPlayer.PlayerGui
+Array.Parent = uiparent
 Array.ZIndexBehavior = Enum.ZIndexBehavior.Global
 Array.ResetOnSpawn = false
 Array.DisplayOrder = 2147483647
@@ -67,6 +81,7 @@ Text.Text = "Clientsided - V2"
 Text.TextColor3 = Color3.fromRGB(255, 255, 255)
 Text.TextSize = 17.000
 Text.TextWrapped = true
+Text.RichText = true
 
 TitleShadow.Name = "TitleShadow"
 TitleShadow.Parent = Title
@@ -108,6 +123,7 @@ Text_2.Text = "Placeholder"
 Text_2.TextColor3 = Color3.fromRGB(255, 255, 255)
 Text_2.TextSize = 17.000
 Text_2.TextWrapped = true
+Text_2.RichText = true
 
 TitleShadow_2.Name = "TitleShadow"
 TitleShadow_2.Parent = Placeholder
@@ -125,120 +141,247 @@ UIGradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0.00, Color3.from
 UIGradient.Rotation = 90
 UIGradient.Parent = Placeholder
 
-local addModule = {}
-local TextService = game:GetService("TextService")
-local MAX_BOUNDS = Vector2.new(1e5, 1e5)
-
-Placeholder.Visible = false
-
-local function clone(instance: Instance, parent: any?)
-	assert(instance, "failed to clone, no instance provided.")
-
-	local newClone = instance:Clone()
-	if not newClone then
-		warn("failed to clone, cloned instance was not found.")
-		return
-	end
-
-	if parent then
-		newClone.Parent = parent
-	end
-
-	return newClone
-end
-
-local function getFont(item: GuiLabel)
-	assert(item)
-
-	for _, font in pairs(Enum.Font:GetEnumItems()) do
-		if item.Font.Name == font.Name then
-			return font.Name
-		else
-			continue
-		end
-	end
-
-	return nil
-end
-
-local function resizeArray(item: Frame, extraPadding: number?)
-	local textLabel = item:FindFirstChild("Text") :: TextLabel
-	if not textLabel then return end
-
-	local textSize = TextService:GetTextSize(
-		textLabel.Text,
-		textLabel.TextSize,
-		getFont(textLabel),
-		MAX_BOUNDS
-	)
-
-	local newPadding = if extraPadding then extraPadding else 25
-
-	item.Size = UDim2.new(0, textSize.X + newPadding, item.Size.Y.Scale, item.Size.Y.Offset)
-end
-
-local function resizeText(item: TextLabel)
-	local text = item.Text
-	local fontSize = item.TextSize
-	local font = getFont(item)
-
-	local textSize = TextService:GetTextSize(text, fontSize, font, MAX_BOUNDS)
-
-	item.Size = UDim2.new(0, textSize.X, 0, textSize.Y)
-end
-
-function addModule.title(text: string)
-	assert(text)
-
-	local Text = Title:FindFirstChild("Text")
-	Text.Text = text
-
-	resizeText(Text)
-	resizeArray(Title, 20)
-end
-
-function addModule.new(data: { name: string })
-	if not data then
-		return
-	end
-
-	local Name = data.name
-
-	local newArray = clone(Placeholder, Side) :: Instance
-	local textArray = newArray.Text
-
-	newArray.Name = Name
-	textArray.Text = Name
-
-	newArray.Visible = true
-
-	resizeText(textArray)
-	resizeArray(newArray)
-
-	return newArray
-end
-
-function addModule.updText(data: { array: Instance, newText: string })
-	assert(data)
-
-	local Array = data.array
-	if Array then
-		local arrayText = Array.Text
-		arrayText.Text = data.newText
-
-		resizeText(arrayText)
-		resizeArray(Array)
-	else
-		return false
-	end
-
-	return true
-end
-
-function addModule.Toggle(array: Instance)
-	assert(array)
+local function arraylist()
+	local addModule = {}
+	local transparencyCache = {}
 	
-	array.Visible = not array.Visible
+	local MAX_BOUNDS = Vector2.new(1e5, 1e5)
+
+	Placeholder.Visible = false
+
+	local function clone(instance: Instance, parent: any?)
+		assert(instance, "failed to clone, no instance provided.")
+
+		local newClone = instance:Clone()
+		if not newClone then
+			warn("failed to clone, cloned instance was not found.")
+			return
+		end
+
+		if parent then
+			newClone.Parent = parent
+		end
+
+		return newClone
+	end
+	
+	local function tweenItem(item, goal)
+		assert(item)
+		
+		local Tween = TweenService:Create(item, TweenInfo.new(0.15), goal)
+		Tween:Play()
+		
+		return Tween
+	end
+
+	local function getFont(item: GuiLabel)
+		assert(item)
+
+		for _, font in pairs(Enum.Font:GetEnumItems()) do
+			if item.Font.Name == font.Name then
+				return font.Name
+			else
+				continue
+			end
+		end
+
+		return nil
+	end
+
+	local function stripRichText(text: string): string
+		return string.gsub(text, "<[^>]->", "")
+	end
+
+	local function resizeArray(item: Frame, extraPadding: number?)
+		local textLabel = item:FindFirstChild("Text") :: TextLabel
+		if not textLabel then return end
+
+		local cleanText = stripRichText(textLabel.Text)
+
+		local textSize = TextService:GetTextSize(
+			cleanText,
+			textLabel.TextSize,
+			getFont(textLabel),
+			MAX_BOUNDS
+		)
+
+		local newPadding = extraPadding or 25
+
+		item.Size = UDim2.new(0, textSize.X + newPadding, item.Size.Y.Scale, item.Size.Y.Offset)
+	end
+
+	local function resizeText(item: TextLabel)
+		local text = stripRichText(item.Text)
+		local fontSize = item.TextSize
+		local font = getFont(item)
+
+		local textSize = TextService:GetTextSize(text, fontSize, font, MAX_BOUNDS)
+
+		item.Size = UDim2.new(0, textSize.X, 0, textSize.Y)
+	end
+
+	function addModule.title(text: string)
+		assert(text)
+
+		local Text = Title:FindFirstChild("Text")
+		Text.Text = text
+
+		resizeText(Text)
+		resizeArray(Title)
+	end
+
+	function addModule.new(data: { name: string })
+		if not data then
+			return
+		end
+
+		local Name = data.name
+
+		local newArray = clone(Placeholder, Side) :: Instance
+		local textArray = newArray.Text
+
+		newArray.Name = Name
+		textArray.Text = Name
+
+		newArray.Visible = true
+
+		resizeText(textArray)
+		resizeArray(newArray)
+
+		return newArray
+	end
+
+	function addModule.updText(data: { array: Instance, newText: string })
+		assert(data)
+
+		local Array = data.array
+		if Array then
+			local arrayText = Array.Text
+			arrayText.Text = data.newText
+
+			resizeText(arrayText)
+			resizeArray(Array)
+		else
+			return false
+		end
+
+		return true
+	end
+
+	function addModule.Toggle(container: Instance)
+		assert(container)
+
+		local isVisible = container.Visible
+
+		local objects = {}
+		table.insert(objects, container)
+		for _, obj in ipairs(container:GetDescendants()) do
+			table.insert(objects, obj)
+		end
+
+		local tweens = {}
+
+		for _, obj in ipairs(objects) do
+			if obj:IsA("UICorner") then
+				continue
+			end
+
+			if not transparencyCache[obj] then
+				transparencyCache[obj] = transparencyCache[obj] or {}
+			end
+			
+			local cache = transparencyCache[obj]
+
+			local props = {}
+
+			if not cache.saved then
+				if obj:IsA("GuiObject") then
+					cache.BackgroundTransparency = obj.BackgroundTransparency
+				end
+				if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+					cache.TextTransparency = obj.TextTransparency
+				end
+				if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+					cache.ImageTransparency = obj.ImageTransparency
+				end
+				cache.saved = true
+			end
+
+			if isVisible then
+				if cache.BackgroundTransparency ~= nil then
+					props.BackgroundTransparency = 1
+				end
+				if cache.TextTransparency ~= nil then
+					props.TextTransparency = 1
+				end
+				if cache.ImageTransparency ~= nil then
+					props.ImageTransparency = 1
+				end
+			else
+				if cache.BackgroundTransparency ~= nil then
+					props.BackgroundTransparency = cache.BackgroundTransparency
+				end
+				if cache.TextTransparency ~= nil then
+					props.TextTransparency = cache.TextTransparency
+				end
+				if cache.ImageTransparency ~= nil then
+					props.ImageTransparency = cache.ImageTransparency
+				end
+			end
+
+			if next(props) then
+				local valid = false
+				for prop, value in pairs(props) do
+					if obj[prop] ~= value then
+						valid = true
+						break
+					end
+				end
+
+				if valid then
+					if not isVisible then
+						if props.BackgroundTransparency then
+							obj.BackgroundTransparency = 1
+						end
+						if props.TextTransparency then
+							obj.TextTransparency = 1
+						end
+						if props.ImageTransparency then
+							obj.ImageTransparency = 1
+						end
+					end
+
+					local tween = tweenItem(obj, props)
+					table.insert(tweens, tween)
+				end
+			end
+		end
+
+		if isVisible == true then
+			for _, tween in pairs(tweens) do
+				local finished = false
+
+				tween.Completed:Connect(function()
+					finished = true
+				end)
+
+				task.delay(1, function()
+					finished = true
+				end)
+
+				while not finished do
+					task.wait()
+				end
+			end
+			container.Visible = false
+		elseif isVisible == false then
+			container.Visible = true
+		end
+		
+		table.clear(tweens, objects)
+	end
+
+	return addModule
 end
 
-return addModule
+return arraylist
